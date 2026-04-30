@@ -25748,33 +25748,995 @@ function tmplRecRenderBlank(grid){
     { name:'빈 문서', icon:'<svg width="36" height="36" viewBox="0 0 48 48" fill="none"><rect x="8" y="6" width="32" height="36" rx="3" stroke="#C8CDD8" stroke-width="2.5"/><path d="M16 16h16M16 22h10" stroke="#C8CDD8" stroke-width="2" stroke-linecap="round"/></svg>' },
   ];
 
-  // 카드 HTML 생성 (공통)
+  // [UPDATED 2026-04] 클릭 시 즉시 삽입 → 선택 표시 + 우측 미리보기 갱신
+  //   하단 "템플릿 선택" 버튼 클릭 시 실제 삽입 (사용자 요청)
+  // 교과(영어/수학) 판별 — lgCurrentGrade.subjectId 기준
+  var _curGradeBP = (typeof lgCurrentGrade !== 'undefined' && lgCurrentGrade) ? lgCurrentGrade : null;
+  var _subjBP = _curGradeBP && _curGradeBP.subjectId === 'english' ? 'english' : 'math';
+  // 카드 HTML — 클릭 시 선택만 (즉시 삽입 X)
   const cardHtml = (t) => `
-    <div onclick="tmplRecInsertBlank('${t.name}')"
-      style="border-radius:14px;overflow:hidden;border:1.5px solid #F0F0F0;background:white;cursor:pointer;transition:all .18s;padding:22px 10px 16px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;min-height:150px;"
-      onmouseover="this.style.borderColor='#4B6EF5';this.style.boxShadow='0 6px 18px rgba(75,110,245,.12)';this.style.transform='translateY(-2px)'"
-      onmouseout="this.style.borderColor='#F0F0F0';this.style.boxShadow='none';this.style.transform='none'">
-      <div style="width:72px;height:72px;border-radius:12px;background:#F8F9FB;display:flex;align-items:center;justify-content:center;">${t.icon}</div>
-      <div style="font-size:14px;font-weight:700;color:#1F2937;">${t.name}</div>
+    <div class="tmpl-blank-card" data-tmpl-name="${t.name}" onclick="tmplRecBlankSelect(this,'${t.name}')"
+      style="border-radius:14px;border:1.5px solid #F0F0F0;background:white;cursor:pointer;transition:all .18s;padding:18px 6px 12px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;min-height:130px;"
+      onmouseover="if(!this.classList.contains('on')){this.style.borderColor='#A8B8FF';this.style.boxShadow='0 4px 12px rgba(75,110,245,.10)';this.style.transform='translateY(-1px)';}"
+      onmouseout="if(!this.classList.contains('on')){this.style.borderColor='#F0F0F0';this.style.boxShadow='none';this.style.transform='none';}">
+      <div style="width:60px;height:60px;border-radius:10px;background:#F8F9FB;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${t.icon}</div>
+      <div style="font-size:11.5px;font-weight:700;color:#1F2937;line-height:1.3;width:100%;padding:0 2px;white-space:nowrap;overflow:visible;">${t.name}</div>
     </div>`;
 
-  // 섹션 HTML 생성
+  // 섹션 HTML — 카드만 (3열로 컴팩트)
   const sectionHtml = (title, items) => `
-    <div style="margin-bottom:28px;">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
-        <span style="font-size:13px;font-weight:700;color:#6B7280;white-space:nowrap;">${title}</span>
+    <div style="margin-bottom:20px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <span style="font-size:12px;font-weight:700;color:#6B7280;white-space:nowrap;">${title}</span>
         <div style="flex:1;height:1px;background:#E5E7EB;"></div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
         ${items.map(cardHtml).join('')}
       </div>
     </div>`;
 
-  grid.innerHTML =
-    sectionHtml('문항', QUESTIONS) +
-    sectionHtml('활동', ACTIVITIES) +
-    sectionHtml('개념', CONCEPTS);
+  // 좌측 카드 그리드 + 우측 미리보기 + 하단 선택 버튼 — 2단 레이아웃
+  grid.style.display = 'flex';
+  grid.style.flexDirection = 'column';
+  grid.style.gap = '0';
+  grid.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1.1fr;gap:20px;align-items:start;">
+      <!-- 좌측 카드 영역 -->
+      <div id="tmplBlankCardArea" style="overflow-y:auto;height:640px;padding-right:6px;">
+        ${sectionHtml('문항', QUESTIONS)}
+        ${sectionHtml('활동', ACTIVITIES)}
+        ${sectionHtml('개념', CONCEPTS)}
+      </div>
+      <!-- 우측 미리보기 영역 -->
+      <div style="border:1.5px solid #E5E7EB;border-radius:14px;background:#FAFBFF;padding:18px;height:640px;display:flex;flex-direction:column;">
+        <div style="font-size:11px;font-weight:700;color:#9CA3AF;letter-spacing:.06em;margin-bottom:6px;text-transform:uppercase;">미리보기</div>
+        <div id="tmplBlankPreviewTitle" style="font-size:15px;font-weight:800;color:#1E2340;margin-bottom:14px;">선택형</div>
+        <div id="tmplBlankPreview" style="flex:1;min-height:0;border:1px solid #E5E7EB;border-radius:10px;background:white;padding:16px;overflow:hidden auto;font-family:'Noto Sans KR',sans-serif;position:relative;contain:paint;"></div>
+      </div>
+    </div>
+    <!-- 하단 "템플릿 선택" 버튼 -->
+    <div style="display:flex;justify-content:flex-end;gap:8px;padding:24px 0 8px;border-top:1px solid #EAECF0;margin-top:28px;">
+      <button onclick="closeTmplRecommend()" style="height:42px;padding:0 22px;border-radius:10px;border:1.5px solid #E5E7EB;background:white;font-size:13px;font-weight:600;color:#555E75;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:all .14s;" onmouseover="this.style.borderColor='#1E2340';this.style.color='#1E2340';" onmouseout="this.style.borderColor='#E5E7EB';this.style.color='#555E75';">취소</button>
+      <button id="tmplBlankConfirmBtn" onclick="tmplRecBlankConfirm()" style="height:42px;padding:0 26px;border-radius:10px;border:none;background:linear-gradient(135deg,#4B6EF5,#7C4DFF);color:white;font-size:13px;font-weight:800;cursor:pointer;font-family:'Noto Sans KR',sans-serif;box-shadow:0 3px 12px rgba(75,110,245,.3);transition:all .15s;" onmouseover="this.style.transform='translateY(-1px)';" onmouseout="this.style.transform='';">템플릿 선택</button>
+    </div>
+  `;
+
+  // 디폴트 선택 — 첫 번째 템플릿 (선택형)
+  var firstName = (QUESTIONS[0] && QUESTIONS[0].name) || '';
+  if(firstName){
+    setTimeout(function(){
+      var firstCard = grid.querySelector('.tmpl-blank-card[data-tmpl-name="'+firstName+'"]');
+      if(firstCard) tmplRecBlankSelect(firstCard, firstName);
+    }, 30);
+  }
+  // 교과 정보를 grid에 저장 (예시 렌더에서 참조)
+  grid.dataset.subj = _subjBP;
 }
+
+// [ADDED 2026-04] 빈 템플릿 카드 선택 — 선택 표시 + 우측 미리보기 갱신 (즉시 삽입 X)
+window.tmplRecBlankSelect = function(card, tmplName){
+  if(!card) return;
+  var grid = document.getElementById('tmplRecGrid');
+  if(!grid) return;
+  // 다른 카드 선택 해제
+  grid.querySelectorAll('.tmpl-blank-card').forEach(function(c){
+    c.classList.remove('on');
+    c.style.borderColor = '#F0F0F0';
+    c.style.background = 'white';
+    c.style.boxShadow = 'none';
+    c.style.transform = 'none';
+  });
+  // 클릭한 카드 선택
+  card.classList.add('on');
+  card.style.borderColor = '#4B6EF5';
+  card.style.background = '#F5F7FF';
+  card.style.boxShadow = '0 6px 18px rgba(75,110,245,.18)';
+  card.style.transform = 'translateY(-1px)';
+  // 우측 미리보기 갱신
+  var titleEl = document.getElementById('tmplBlankPreviewTitle');
+  if(titleEl) titleEl.textContent = tmplName;
+  var previewEl = document.getElementById('tmplBlankPreview');
+  if(previewEl){
+    var subj = grid.dataset.subj || 'math';
+    previewEl.innerHTML = (typeof window._tmplBlankPreviewHtml === 'function')
+      ? window._tmplBlankPreviewHtml(tmplName, subj)
+      : '<div style="color:#9CA3AF;text-align:center;padding:40px 0;">미리보기 준비 중…</div>';
+  }
+  // 선택된 템플릿 이름 저장
+  window._tmplBlankSelected = tmplName;
+};
+
+// [ADDED 2026-04] 빈 템플릿 — 우측 미리보기 HTML 생성 (교과별 분기)
+//   subj: 'english' | 'math'
+window._tmplBlankPreviewHtml = function(tmplName, subj){
+  var isEng = (subj === 'english');
+
+  // [ADDED 2026-04] 영어 담당 — 사실적 미리보기 (사용자 요청, 첨부 이미지 기준)
+  if(isEng){
+    if(tmplName === '빈 문서'){
+      return ''
+        + '<div style="background:linear-gradient(180deg,#D6E9FF,#E8F2FF);border-radius:14px;padding:18px 16px;display:grid;grid-template-columns:1.5fr 1fr;gap:14px;align-items:center;position:relative;overflow:visible;">'
+        +   '<div style="position:relative;">'
+        +     '<div style="background:white;border:2.5px solid #95C8E8;border-radius:18px;padding:14px 18px 16px 18px;position:relative;box-shadow:0 2px 6px rgba(0,0,0,0.04);">'
+        +       '<div style="display:flex;align-items:flex-start;gap:8px;">'
+        +         '<span style="flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#9189D8;color:white;font-size:11px;margin-top:1px;">🔊</span>'
+        +         '<div style="font-size:10.5px;color:#1E2340;line-height:1.85;">I have six classes today. Do I have all my textbooks? Yes, I do. Oh, no! My pencil case isn\'t in my bag. I check my bag again and again. Oh, it\'s on my desk. My first class starts at 9:00 a.m. Oops, it\'s already 8:50 a.m.!</div>'
+        +       '</div>'
+        +     '</div>'
+        +     '<svg viewBox="0 0 36 44" style="position:absolute;left:-18px;top:-10px;width:34px;height:auto;transform:rotate(-12deg);">'
+        +       '<rect x="3" y="6" width="30" height="34" rx="2" fill="white" stroke="#1E2340" stroke-width="1.2"/>'
+        +       '<g fill="#7E848C">'
+        +         '<rect x="6" y="3" width="2" height="6" rx="1"/>'
+        +         '<rect x="11" y="3" width="2" height="6" rx="1"/>'
+        +         '<rect x="16" y="3" width="2" height="6" rx="1"/>'
+        +         '<rect x="21" y="3" width="2" height="6" rx="1"/>'
+        +         '<rect x="26" y="3" width="2" height="6" rx="1"/>'
+        +       '</g>'
+        +       '<g>'
+        +         '<rect x="7" y="14" width="5" height="5" rx="1" fill="#FFD0D0" stroke="#E53935" stroke-width="0.8"/>'
+        +         '<rect x="7" y="22" width="5" height="5" rx="1" fill="#FFD0D0" stroke="#E53935" stroke-width="0.8"/>'
+        +         '<rect x="7" y="30" width="5" height="5" rx="1" fill="white" stroke="#7E848C" stroke-width="0.7"/>'
+        +         '<line x1="14" y1="17" x2="29" y2="17" stroke="#C8CDD8" stroke-width="0.8"/>'
+        +         '<line x1="14" y1="25" x2="29" y2="25" stroke="#C8CDD8" stroke-width="0.8"/>'
+        +         '<line x1="14" y1="33" x2="29" y2="33" stroke="#C8CDD8" stroke-width="0.8"/>'
+        +       '</g>'
+        +     '</svg>'
+        +     '<svg viewBox="0 0 50 14" style="position:absolute;right:-14px;bottom:-8px;width:60px;height:auto;transform:rotate(20deg);">'
+        +       '<rect x="0" y="3" width="6" height="8" rx="1" fill="#FFB3B3" stroke="#1E2340" stroke-width="0.8"/>'
+        +       '<rect x="6" y="3" width="3" height="8" fill="#E0E2E5" stroke="#1E2340" stroke-width="0.8"/>'
+        +       '<rect x="9" y="3" width="30" height="8" fill="#5C7BE0" stroke="#1E2340" stroke-width="0.8"/>'
+        +       '<polygon points="39,3 39,11 47,7" fill="#FFE0B0" stroke="#1E2340" stroke-width="0.8"/>'
+        +       '<polygon points="46,5.5 46,8.5 49,7" fill="#1E2340"/>'
+        +     '</svg>'
+        +     '<svg viewBox="0 0 60 14" style="position:absolute;left:50%;bottom:-14px;width:64px;height:auto;transform:translateX(-30%) rotate(-8deg);">'
+        +       '<rect x="0" y="2" width="60" height="10" rx="1" fill="#FFD180" stroke="#1E2340" stroke-width="0.9"/>'
+        +       '<g stroke="#1E2340" stroke-width="0.6">'
+        +         '<line x1="6" y1="2" x2="6" y2="6"/><line x1="12" y1="2" x2="12" y2="5"/>'
+        +         '<line x1="18" y1="2" x2="18" y2="6"/><line x1="24" y1="2" x2="24" y2="5"/>'
+        +         '<line x1="30" y1="2" x2="30" y2="6"/><line x1="36" y1="2" x2="36" y2="5"/>'
+        +         '<line x1="42" y1="2" x2="42" y2="6"/><line x1="48" y1="2" x2="48" y2="5"/>'
+        +         '<line x1="54" y1="2" x2="54" y2="6"/>'
+        +       '</g>'
+        +     '</svg>'
+        +   '</div>'
+        +   '<div style="background:white;border-radius:14px;padding:8px 8px 6px 8px;box-shadow:0 4px 12px rgba(0,0,0,0.08);">'
+        +     '<div style="display:flex;align-items:center;gap:6px;padding:2px 4px 6px 4px;">'
+        +       '<span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#FFE0B0;font-size:13px;flex-shrink:0;">🧑</span>'
+        +       '<div style="line-height:1.1;flex:1;">'
+        +         '<div style="font-size:11.5px;font-weight:800;color:#1E2340;">Toby</div>'
+        +         '<div style="font-size:9px;font-weight:500;color:#9CA3AF;margin-top:1px;">@On_Time</div>'
+        +       '</div>'
+        +       '<span style="font-size:13px;color:#9CA3AF;letter-spacing:1px;line-height:1;">···</span>'
+        +     '</div>'
+        +     '<div style="aspect-ratio:1;background:linear-gradient(180deg,#E8F0F7 0%,#E8F0F7 60%,#D5C8B0 60%,#C5B595 100%);border-radius:10px;position:relative;overflow:hidden;">'
+        +       '<div style="position:absolute;top:0;left:0;right:0;height:60%;background-image:linear-gradient(90deg,rgba(255,255,255,.4) 1px,transparent 1px),linear-gradient(0deg,rgba(255,255,255,.4) 1px,transparent 1px);background-size:33% 50%;"></div>'
+        +       '<div style="position:absolute;left:8%;top:14%;width:26px;height:26px;background:#9C7CD0;border-radius:50%;border:2px solid #1E2340;display:flex;align-items:center;justify-content:center;">'
+        +         '<div style="width:14px;height:14px;background:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;color:#1E2340;font-weight:900;">⏰</div>'
+        +         '<span style="position:absolute;top:-3px;left:-2px;width:5px;height:6px;background:#9C7CD0;border:1.5px solid #1E2340;border-radius:50% 50% 0 0;"></span>'
+        +         '<span style="position:absolute;top:-3px;right:-2px;width:5px;height:6px;background:#9C7CD0;border:1.5px solid #1E2340;border-radius:50% 50% 0 0;"></span>'
+        +       '</div>'
+        +       '<div style="position:absolute;right:6%;top:30%;font-family:Arial,sans-serif;font-size:18px;font-weight:900;color:#FF5722;font-style:italic;line-height:1;letter-spacing:-1px;text-shadow:1px 1px 0 white,-1px -1px 0 white,1px -1px 0 white,-1px 1px 0 white;transform:rotate(-6deg);">Oops!</div>'
+        +       '<div style="position:absolute;left:46%;top:18%;font-size:8px;color:#E53935;">〰〰</div>'
+        +       '<div style="position:absolute;left:50%;top:30%;transform:translateX(-50%);text-align:center;">'
+        +         '<div style="font-size:22px;line-height:1;">🧒</div>'
+        +         '<div style="width:60px;height:30px;background:#1976D2;border-radius:50% 50% 8px 8px / 70% 70% 8px 8px;margin-top:-4px;"></div>'
+        +       '</div>'
+        +       '<div style="position:absolute;left:30%;bottom:10%;font-size:30px;line-height:1;">🎒</div>'
+        +       '<div style="position:absolute;right:14%;bottom:14%;display:flex;gap:1px;">'
+        +         '<span style="display:inline-block;width:3px;height:14px;background:#FF7043;border-radius:1px;"></span>'
+        +         '<span style="display:inline-block;width:3px;height:14px;background:#42A5F5;border-radius:1px;"></span>'
+        +         '<span style="display:inline-block;width:3px;height:14px;background:#66BB6A;border-radius:1px;"></span>'
+        +         '<span style="display:inline-block;width:3px;height:14px;background:#FFCA28;border-radius:1px;"></span>'
+        +       '</div>'
+        +     '</div>'
+        +     '<div style="display:flex;gap:10px;padding:6px 4px 2px 4px;font-size:13px;color:#1E2340;">'
+        +       '<span>♡</span><span>💬</span><span>↗</span>'
+        +     '</div>'
+        +   '</div>'
+        + '</div>';
+    }
+    if(tmplName === '선택형' || tmplName === '선택형 활동'){
+      var emojiCard = function(num, emoji, bg){
+        return ''
+          + '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;">'
+          +   '<div style="font-size:11px;color:#1E2340;font-weight:600;">'+num+'</div>'
+          +   '<div style="width:100%;aspect-ratio:1;background:'+bg+';border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:36px;">'+emoji+'</div>'
+          + '</div>';
+      };
+      return ''
+        + '<div style="margin-bottom:14px;">'
+        +   '<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 18px;background:linear-gradient(90deg,#2E7D44,#43A047);color:white;border-radius:30px;font-size:14px;font-weight:900;letter-spacing:.5px;font-family:\'Noto Sans KR\',sans-serif;">'
+        +     '<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:white;color:#2E7D44;font-size:12px;font-weight:900;">1</span>'
+        +     'Listen + View'
+        +   '</span>'
+        + '</div>'
+        + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:12.5px;color:#1E2340;font-weight:700;">'
+        +   '<span>대화의 상황으로 알맞은 것을 고르세요.</span>'
+        +   '<span style="display:inline-flex;align-items:center;gap:3px;padding:3px 10px;background:#7C4DFF;color:white;border-radius:14px;font-size:10px;font-weight:800;">음원 ▶</span>'
+        + '</div>'
+        + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">'
+        +   emojiCard('①', '👋', '#FFE5DC')
+        +   emojiCard('②', '🧁', '#FFF3DC')
+        +   emojiCard('③', '👋', '#E0F4FF')
+        + '</div>';
+    }
+    if(tmplName === '선택형(초등)'){
+      return ''
+        + '<div style="background:linear-gradient(180deg,#A8DAFF,#D8ECFF);border-radius:12px;padding:14px;position:relative;overflow:hidden;">'
+        +   '<div style="position:absolute;left:0;right:0;bottom:0;height:24px;background:linear-gradient(180deg,transparent,#FFE9B5);"></div>'
+        +   '<div style="display:flex;align-items:center;gap:8px;background:#F0F9FF;border-radius:8px;padding:8px 14px;margin-bottom:10px;border:1.5px solid #BCE0FA;">'
+        +     '<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:#2196F3;color:white;border-radius:5px;font-size:11px;font-weight:800;">1</span>'
+        +     '<span style="font-size:12.5px;color:#1E2340;font-weight:700;">빈칸에 알맞은 낱말을 골라 줘.</span>'
+        +   '</div>'
+        +   '<div style="background:white;border:2px solid #2196F3;border-radius:12px;padding:18px;text-align:center;margin-bottom:14px;">'
+        +     '<div style="font-size:11px;color:#1E2340;margin-bottom:5px;">이것은 네 거니?</div>'
+        +     '<div style="font-size:14px;font-weight:800;color:#1E2340;">Is this <span style="display:inline-block;border-bottom:2px solid #1E2340;width:60px;vertical-align:middle;height:1px;"></span>?</div>'
+        +   '</div>'
+        +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;position:relative;z-index:1;">'
+        +     '<div style="background:white;border:1.5px solid #C8CDD8;border-radius:10px;padding:14px 8px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#1E2340;position:relative;">'
+        +       '<span style="position:absolute;top:-7px;left:-7px;width:20px;height:20px;border-radius:50%;background:#1E5A8A;color:white;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;">1</span>'
+        +       'yours'
+        +     '</div>'
+        +     '<div style="background:white;border:1.5px solid #C8CDD8;border-radius:10px;padding:14px 8px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#1E2340;position:relative;">'
+        +       '<span style="position:absolute;top:-7px;left:-7px;width:20px;height:20px;border-radius:50%;background:#1E5A8A;color:white;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;">2</span>'
+        +       'whose'
+        +     '</div>'
+        +   '</div>'
+        +   '<span style="position:absolute;left:6px;bottom:4px;font-size:18px;">🐹</span>'
+        + '</div>';
+    }
+    if(tmplName === '단답형' || tmplName === '단답형 활동'){
+      return ''
+        + '<div style="margin-bottom:10px;">'
+        +   '<span style="display:inline-block;padding:6px 18px;background:#FFE066;color:#1E5A8A;border-radius:6px;font-size:14px;font-weight:900;letter-spacing:.5px;font-family:Arial,sans-serif;clip-path:polygon(0 0, 95% 0, 100% 50%, 95% 100%, 0 100%);">GET READY</span>'
+        + '</div>'
+        + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:12px;color:#1E2340;font-weight:700;line-height:1.5;">'
+        +   '<span>빈칸에 들어갈 말을 생각해 본 후, 동영상으로 내용을 확인하세요.</span>'
+        +   '<span style="flex-shrink:0;display:inline-flex;align-items:center;gap:3px;padding:3px 10px;background:#E53935;color:white;border-radius:14px;font-size:10px;font-weight:800;">영상 ▶</span>'
+        + '</div>'
+        + '<div style="background:linear-gradient(180deg,#E5F2FF,#C8E0F7);border-radius:12px;padding:14px;position:relative;overflow:hidden !important;min-height:140px;contain:paint;">'
+        +   '<div style="display:flex;justify-content:space-around;align-items:flex-start;gap:8px;position:relative;z-index:1;">'
+        +     '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;">'
+        +       '<div style="background:white;border:1.5px solid #1E2340;border-radius:14px;padding:8px 12px;position:relative;font-size:9.5px;color:#1E2340;line-height:1.4;text-align:center;max-width:120px;">'
+        +         'Hello. I\'m Robo.<br>Nice to meet you.'
+        +         '<div style="position:absolute;left:30%;bottom:-6px;width:0;height:0;border-top:6px solid white;border-left:5px solid transparent;border-right:5px solid transparent;"></div>'
+        +       '</div>'
+        +       '<div style="font-size:32px;line-height:1;">🤖</div>'
+        +     '</div>'
+        +     '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0;">'
+        +       '<div style="background:white;border:1.5px solid #1E2340;border-radius:14px;padding:8px 12px;position:relative;font-size:9.5px;color:#1E2340;line-height:1.4;text-align:center;">'
+        +         'Nice to <span style="display:inline-block;background:#FFE066;width:30px;height:8px;vertical-align:middle;border-radius:2px;"></span> you, Robo.<br>I\'m Clara.'
+        +         '<div style="position:absolute;right:30%;bottom:-6px;width:0;height:0;border-top:6px solid white;border-left:5px solid transparent;border-right:5px solid transparent;"></div>'
+        +       '</div>'
+        +       '<div style="display:flex;gap:2px;font-size:24px;">👧🧑</div>'
+        +     '</div>'
+        +   '</div>'
+        +   '<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-8deg);font-size:13px;font-weight:900;color:#FFC107;background:#FFF;padding:2px 8px;border-radius:5px;border:1.5px solid #1E2340;z-index:2;line-height:1;">WoW</div>'
+        +   '<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);font-size:16px;line-height:1;z-index:2;">🦊</div>'
+        + '</div>';
+    }
+    // E5) 서술형 활동 — STEP 1/2/3 진행 + 예시 박스 + 캐릭터
+    if(tmplName === '서술형 활동'){
+      var stepBtn = function(label, active){
+        var bg = active ? '#7C4DFF' : '#F0F1F5';
+        var color = active ? 'white' : '#9CA3AF';
+        return '<span style="display:inline-flex;align-items:center;gap:5px;padding:5px 14px;background:'+bg+';color:'+color+';border-radius:14px;font-size:11px;font-weight:800;font-family:Arial,sans-serif;letter-spacing:.5px;">STEP <span style="font-size:12px;">'+label+'</span></span>';
+      };
+      return ''
+        + '<div style="display:flex;gap:6px;margin-bottom:14px;">'
+        +   stepBtn('1', false) + stepBtn('2', false) + stepBtn('3', true)
+        + '</div>'
+        + '<div style="font-size:13px;font-weight:800;color:#7C4DFF;margin-bottom:10px;"><span style="font-family:Arial,sans-serif;">STEP 2</span>를 바탕으로 추억이 담긴 그림을 짝에게 묘사해 보세요.</div>'
+        + '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;">'
+        +   '<div style="flex:1;position:relative;">'
+        +     '<div style="display:inline-block;background:#5DADE2;color:white;padding:3px 10px;border-radius:6px 6px 6px 0;font-size:10px;font-weight:800;margin-bottom:-2px;">e.g.</div>'
+        +     '<div style="border:1.5px solid #B0B5C0;border-radius:8px;padding:12px 14px;background:white;font-size:11px;color:#1E2340;line-height:1.85;">'
+        +       '<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:3px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#9CA3AF;color:white;font-size:8px;flex-shrink:0;">🔊</span><span>This is a picture of <span style="color:#E91E63;font-weight:800;">me and my dad</span>.</span></div>'
+        +       '<div style="color:#E91E63;font-weight:800;padding-left:24px;">I am riding a bike.</div>'
+        +       '<div style="color:#E91E63;font-weight:800;padding-left:24px;">My dad is holding the bike.</div>'
+        +       '<div style="padding-left:24px;">It\'s my favorite picture.</div>'
+        +     '</div>'
+        +   '</div>'
+        +   '<div style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:4px;">'
+        +     '<div style="background:#D8ECFF;border-radius:10px;padding:6px 8px;font-size:9.5px;color:#1E2340;line-height:1.5;text-align:center;width:90px;position:relative;">듣는 사람이 정보를<br>정확히 알아들을 수 있도록<br>천천히 말하세요.<div style="position:absolute;left:50%;bottom:-5px;margin-left:-4px;width:0;height:0;border-top:5px solid #D8ECFF;border-left:4px solid transparent;border-right:4px solid transparent;"></div></div>'
+        +     '<div style="font-size:24px;line-height:1;">🤖</div>'
+        +   '</div>'
+        + '</div>'
+        + '<div style="font-size:11px;color:#555E75;margin:8px 0 4px;">아래에 초안을 작성해 보세요.</div>'
+        + '<div style="background:#F0F1F5;border-radius:8px;min-height:50px;"></div>';
+    }
+    // E6) OX형
+    if(tmplName === 'OX형'){
+      return ''
+        + '<div style="font-size:12.5px;color:#1E2340;line-height:1.6;margin-bottom:12px;display:flex;align-items:flex-start;gap:6px;">'
+        +   '<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;background:#1E5A8A;color:white;border-radius:5px;font-size:10px;font-weight:800;flex-shrink:0;margin-top:1px;">1</span>'
+        +   '<span>잘 듣고, 그림과 일치하면 <span style="color:#E53935;font-weight:800;">O</span>표, 일치하지 <span style="text-decoration:underline;font-weight:700;">않으면</span> <span style="color:#E53935;font-weight:800;">X</span>표를 선택해 봅시다.</span>'
+        + '</div>'
+        + '<div style="position:relative;display:flex;justify-content:center;margin:14px 0 18px;">'
+        +   '<div style="position:absolute;left:32%;top:0;display:flex;flex-direction:column;align-items:center;gap:5px;">'
+        +     '<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#A8B5C4;color:white;font-size:10px;font-weight:800;">1</span>'
+        +     '<span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#A48EE0,#7C4DFF);color:white;font-size:12px;">🎧</span>'
+        +   '</div>'
+        +   '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;">'
+        +     '<div style="background:white;border:1.2px solid #1E2340;border-radius:14px;padding:6px 12px;position:relative;font-size:12px;font-weight:800;color:#1E2340;">'
+        +       '<span style="display:inline-flex;width:28px;height:18px;background:linear-gradient(180deg,#fff 50%,#1E5BCC 50%);border:1px solid #C8CDD8;border-radius:2px;align-items:center;justify-content:center;"><span style="width:10px;height:10px;background:radial-gradient(circle at 40% 40%,#E53935 50%,#1E5BCC 50%);border-radius:50%;"></span></span>'
+        +       '<div style="position:absolute;left:50%;bottom:-7px;margin-left:-5px;width:0;height:0;border-top:7px solid white;border-left:5px solid transparent;border-right:5px solid transparent;"></div>'
+        +     '</div>'
+        +     '<div style="font-size:42px;line-height:1;">👧</div>'
+        +   '</div>'
+        + '</div>'
+        + '<div style="display:flex;justify-content:center;gap:50px;">'
+        +   '<div style="width:48px;height:48px;border:5px solid #7E848C;border-radius:50%;"></div>'
+        +   '<div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;font-size:48px;color:#7E848C;font-weight:900;line-height:1;">✕</div>'
+        + '</div>';
+    }
+    // E7) TF형
+    if(tmplName === 'TF형'){
+      return ''
+        + '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px;">'
+        +   '<span style="flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:#5C6BC0;color:white;border-radius:5px;font-size:11px;font-weight:800;">1</span>'
+        +   '<span style="font-size:12px;color:#1E2340;font-weight:700;line-height:1.5;">다음을 읽고, 주어진 문장이 옳으면 <b>T</b>, <span style="text-decoration:underline;">틀리면</span> <b>F</b>를 고르시오.</span>'
+        + '</div>'
+        + '<div style="border:1.5px solid #1E2340;border-radius:14px;padding:12px 16px;background:white;font-size:11px;color:#1E2340;line-height:1.7;margin-bottom:14px;">'
+        +   '<b>Jimin</b>: This is me on my first day of school. And this is my favorite picture of my mom. Her uniform is cool. Now, I wear a uniform just like her. We wear the same blue tie!'
+        + '</div>'
+        + '<div style="display:flex;flex-direction:column;gap:10px;font-size:11.5px;color:#1E2340;">'
+        +   '<div style="display:flex;align-items:center;justify-content:space-between;"><span>(1) ‘I’ have a picture of my mom.</span><span style="display:flex;gap:6px;flex-shrink:0;"><span style="width:22px;height:22px;border:1.2px solid #C8CDD8;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">T</span><span style="width:22px;height:22px;border:1.2px solid #C8CDD8;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">F</span></span></div>'
+        +   '<div style="display:flex;align-items:center;justify-content:space-between;"><span>(2) ‘I’ and my mom wear the same uniform.</span><span style="display:flex;gap:6px;flex-shrink:0;"><span style="width:22px;height:22px;border:1.2px solid #C8CDD8;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">T</span><span style="width:22px;height:22px;border:1.2px solid #C8CDD8;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">F</span></span></div>'
+        + '</div>';
+    }
+    // E8) 순서입력형
+    if(tmplName === '순서입력형'){
+      return ''
+        + '<div style="font-size:12px;color:#1E2340;font-weight:700;margin-bottom:12px;">그림을 보고, 사건이 일어난 순서대로 문장을 배열하세요.</div>'
+        + '<div style="display:flex;align-items:center;gap:4px;margin-bottom:14px;">'
+        +   '<div style="flex:1;aspect-ratio:1.2;background:#FFF6E0;border:1px solid #E5E7EB;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:26px;">🛋️🐰</div>'
+        +   '<span style="color:#9CA3AF;font-size:14px;flex-shrink:0;">›</span>'
+        +   '<div style="flex:1;aspect-ratio:1.2;background:#F8F5FF;border:1px solid #E5E7EB;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:26px;">😟💜</div>'
+        +   '<span style="color:#9CA3AF;font-size:14px;flex-shrink:0;">›</span>'
+        +   '<div style="flex:1;aspect-ratio:1.2;background:#F0F4FF;border:1px solid #E5E7EB;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:26px;">🤗🐰</div>'
+        +   '<span style="color:#9CA3AF;font-size:14px;flex-shrink:0;">›</span>'
+        +   '<div style="flex:1;aspect-ratio:1.2;background:#E0F0FF;border:1px solid #E5E7EB;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:24px;">🚑</div>'
+        + '</div>'
+        + '<div style="display:flex;flex-direction:column;gap:8px;font-size:11.5px;color:#1E2340;line-height:1.5;">'
+        +   '<div style="display:flex;align-items:center;gap:14px;"><span style="display:inline-block;padding:4px 10px;border:1.2px solid #C8CDD8;border-radius:6px;font-size:10.5px;color:#555E75;font-weight:600;">선택</span><span>Simon, Victoria, and Dory are in the living room.</span></div>'
+        +   '<div style="display:flex;align-items:center;gap:14px;"><span style="display:inline-block;padding:4px 10px;border:1.2px solid #C8CDD8;border-radius:6px;font-size:10.5px;color:#555E75;font-weight:600;">선택</span><span>Victoria finds Simon and takes him to the hospital.</span></div>'
+        +   '<div style="display:flex;align-items:center;gap:14px;"><span style="display:inline-block;padding:4px 10px;border:1.2px solid #C8CDD8;border-radius:6px;font-size:10.5px;color:#555E75;font-weight:600;">선택</span><span>Dory jumps on Simon again and again.</span></div>'
+        +   '<div style="display:flex;align-items:center;gap:14px;"><span style="display:inline-block;padding:4px 10px;border:1.2px solid #C8CDD8;border-radius:6px;font-size:10.5px;color:#555E75;font-weight:600;">선택</span><span>Simon gets sick and needs help.</span></div>'
+        + '</div>';
+    }
+    // E9) 순서조합형
+    if(tmplName === '순서조합형'){
+      var sceneTextCard = function(letter, text, bg, emoji){
+        return ''
+          + '<div style="position:relative;background:'+bg+';border-radius:10px;padding:8px 8px 8px 22px;font-size:9px;color:#1E2340;line-height:1.4;min-height:56px;display:flex;align-items:flex-start;border:1.2px solid #D8DCE3;">'
+          +   '<span style="position:absolute;left:5px;top:5px;display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:#FFD180;border:1px solid #1E2340;font-size:8px;font-weight:800;color:#1E2340;">'+letter+'</span>'
+          +   '<div style="flex:1;padding-right:24px;">'+text+'</div>'
+          +   '<span style="position:absolute;right:4px;bottom:4px;font-size:18px;">'+emoji+'</span>'
+          + '</div>';
+      };
+      var blankCard = function(emoji, bg){
+        return ''
+          + '<div style="background:'+bg+';border:1.2px solid #D8DCE3;border-radius:8px;aspect-ratio:1.5;display:flex;align-items:center;justify-content:center;font-size:18px;">'+emoji+'</div>';
+      };
+      return ''
+        + '<div style="font-size:12px;color:#1E2340;font-weight:700;margin-bottom:12px;">본문의 사건 흐름과 일치하도록 그림을 순서대로 배열하세요.</div>'
+        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">'
+        +   sceneTextCard('A', 'Gary fell down from the chair.', '#FAEFD8', '👨')
+        +   sceneTextCard('B', 'A police officer went to Gary\'s house and found him.', '#D8E8FF', '👮')
+        +   sceneTextCard('C', 'Tommy pushed the buttons on the telephone and called 911.', '#D8E8FF', '🐱')
+        +   sceneTextCard('D', 'Tommy played a telephone game with Gary.', '#D8E8FF', '🐱')
+        + '</div>'
+        + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;align-items:start;">'
+        +   '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;">'+blankCard('👨','#FAEFD8')+'<div style="display:flex;gap:2px;"><span style="display:inline-block;padding:2px 4px;background:#E5E7FF;border-radius:3px;color:#3949AB;font-size:8px;font-weight:800;">◀◀</span><span style="display:inline-block;padding:2px 4px;background:#E5E7FF;border-radius:3px;color:#3949AB;font-size:8px;font-weight:800;">▶▶</span></div></div>'
+        +   '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;">'+blankCard('👮','#D8E8FF')+'<div style="display:flex;gap:2px;"><span style="display:inline-block;padding:2px 4px;background:#E5E7FF;border-radius:3px;color:#3949AB;font-size:8px;font-weight:800;">◀◀</span><span style="display:inline-block;padding:2px 4px;background:#E5E7FF;border-radius:3px;color:#3949AB;font-size:8px;font-weight:800;">▶▶</span></div></div>'
+        +   '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;">'+blankCard('🐱','#D8E8FF')+'<div style="display:flex;gap:2px;"><span style="display:inline-block;padding:2px 4px;background:#E5E7FF;border-radius:3px;color:#3949AB;font-size:8px;font-weight:800;">◀◀</span><span style="display:inline-block;padding:2px 4px;background:#E5E7FF;border-radius:3px;color:#3949AB;font-size:8px;font-weight:800;">▶▶</span></div></div>'
+        +   '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;">'+blankCard('🐱','#D8E8FF')+'<div style="display:flex;gap:2px;"><span style="display:inline-block;padding:2px 4px;background:#E5E7FF;border-radius:3px;color:#3949AB;font-size:8px;font-weight:800;">◀◀</span><span style="display:inline-block;padding:2px 4px;background:#E5E7FF;border-radius:3px;color:#3949AB;font-size:8px;font-weight:800;">▶▶</span></div></div>'
+        + '</div>';
+    }
+    // E10) 연결형 — Listen + View 배지 + 이름↔케이크 연결
+    if(tmplName === '연결형'){
+      var dot = '<span style="width:10px;height:10px;border-radius:50%;background:#7E848C;display:inline-block;flex-shrink:0;"></span>';
+      return ''
+        + '<div style="margin-bottom:12px;">'
+        +   '<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 18px;background:linear-gradient(90deg,#2E7D44,#43A047);color:white;border-radius:30px;font-size:14px;font-weight:900;letter-spacing:.5px;font-family:\'Noto Sans KR\',sans-serif;">'
+        +     '<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:white;color:#2E7D44;font-size:12px;font-weight:900;">2</span>'
+        +     'Listen + View'
+        +   '</span>'
+        + '</div>'
+        + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:12px;color:#1E2340;font-weight:700;line-height:1.5;">'
+        +   '<span>대화를 듣고, <b>Jenny</b>와 민수가 좋아하는 것을 각각 이름에 연결하세요.</span>'
+        +   '<span style="flex-shrink:0;display:inline-flex;align-items:center;gap:3px;padding:3px 10px;background:#7C4DFF;color:white;border-radius:14px;font-size:10px;font-weight:800;">음원 ▶</span>'
+        + '</div>'
+        + '<div style="display:grid;grid-template-columns:1fr 14px 14px 1fr;gap:14px 8px;align-items:center;">'
+        +   '<div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;color:#1E2340;"><span style="font-size:11px;">1.</span><span style="background:#F0F1F5;border-radius:12px;padding:5px 14px;">Jenny</span></div>'
+        +   dot + dot
+        +   '<div style="display:flex;align-items:center;gap:6px;"><div style="width:48px;height:38px;background:radial-gradient(ellipse at 50% 30%,#3E2723 0%,#5D4037 60%);border-radius:6px;display:flex;align-items:center;justify-content:center;position:relative;"><span style="position:absolute;font-size:11px;font-weight:900;color:white;background:#7E848C;border-radius:50%;width:14px;height:14px;display:flex;align-items:center;justify-content:center;">a</span><span style="position:absolute;top:-3px;font-size:8px;">🍫🍫🍫</span></div></div>'
+        +   '<div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;color:#1E2340;"><span style="font-size:11px;">2.</span><span style="background:#F0F1F5;border-radius:12px;padding:5px 14px;">Minsu</span></div>'
+        +   dot + dot
+        +   '<div style="display:flex;align-items:center;gap:6px;"><div style="width:48px;height:38px;background:linear-gradient(180deg,#FFCA28,#FFA000);border-radius:6px 6px 14px 14px;display:flex;align-items:center;justify-content:center;position:relative;"><span style="position:absolute;font-size:11px;font-weight:900;color:white;background:#7E848C;border-radius:50%;width:14px;height:14px;display:flex;align-items:center;justify-content:center;">b</span></div></div>'
+        + '</div>';
+    }
+    // E11) 연쇄형 / 연쇄형 활동 — 영어 캠핑 지문 + 1) 빈칸 채우기 + 2) (A)~(E) 객관식
+    if(tmplName === '연쇄형' || tmplName === '연쇄형 활동'){
+      return ''
+        + '<div style="font-size:11.5px;font-weight:800;color:#1E2340;margin-bottom:6px;">[1-2] 다음을 읽고, 물음에 답하시오.</div>'
+        + '<div style="border:1.2px solid #1E2340;border-radius:10px;padding:8px 10px;background:white;font-size:9.5px;color:#1E2340;line-height:1.55;margin-bottom:10px;">'
+        +   'I went camping with Dad for the first time. "We\'re going to spend the day under nature\'s roof. So, we should understand nature with a special key," Dad said. <b>(A)</b> "What\'s the key?" I asked. <b>(B)</b> We pulled the tent out. <b>(C)</b> "I\'m looking for a place..." <b>(D)</b> "Right..." <b>(E)</b> "The sun moves from east to west..."'
+        + '</div>'
+        + '<div style="display:flex;align-items:flex-start;gap:5px;margin-bottom:5px;">'
+        +   '<span style="flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;background:#5C6BC0;color:white;border-radius:4px;font-size:9.5px;font-weight:800;margin-top:1px;">1</span>'
+        +   '<span style="font-size:11px;color:#1E2340;font-weight:700;line-height:1.4;">윗글의 내용과 일치하도록 빈칸에 알맞은 말을 글에서 찾아 쓰시오.</span>'
+        + '</div>'
+        + '<div style="border:1.2px solid #C8CDD8;border-radius:10px;padding:8px 10px;background:white;font-size:10px;color:#1E2340;margin-bottom:6px;line-height:1.6;">'
+        +   'Minho and his dad set up a tent using <span style="display:inline-block;border:1px solid #C8CDD8;border-radius:4px;width:46px;height:14px;vertical-align:middle;background:#FAFBFF;"></span> to understand <span style="display:inline-block;border:1px solid #C8CDD8;border-radius:4px;width:46px;height:14px;vertical-align:middle;background:#FAFBFF;"></span>.'
+        + '</div>'
+        + '<div style="display:flex;gap:4px;margin-bottom:6px;">'
+        +   '<div style="flex:1;background:#EEF1FF;border-radius:5px;padding:4px 8px;display:flex;align-items:center;justify-content:center;font-size:9.5px;color:#4B6EF5;font-weight:700;"><span>💡 힌트</span></div>'
+        +   '<div style="flex:1;background:#EEF1FF;border-radius:5px;padding:4px 8px;display:flex;align-items:center;justify-content:center;font-size:9.5px;color:#4B6EF5;font-weight:700;"><span>📋 해설</span></div>'
+        +   '<div style="flex:1;background:#EEF1FF;border-radius:5px;padding:4px 8px;display:flex;align-items:center;justify-content:center;font-size:9.5px;color:#4B6EF5;font-weight:700;"><span>📋 해석</span></div>'
+        + '</div>'
+        + '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;"><button style="background:#4B6EF5;color:white;border:none;border-radius:4px;padding:3px 12px;font-size:9.5px;font-weight:700;font-family:\'Noto Sans KR\',sans-serif;">확인하기</button></div>'
+        + '<div style="display:flex;align-items:flex-start;gap:5px;margin-bottom:5px;">'
+        +   '<span style="flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;background:#5C6BC0;color:white;border-radius:4px;font-size:9.5px;font-weight:800;margin-top:1px;">2</span>'
+        +   '<span style="font-size:11px;color:#1E2340;font-weight:700;line-height:1.4;">윗글의 (A)~(E) 중 주어진 문장이 들어갈 곳으로 알맞은 것은?</span>'
+        + '</div>'
+        + '<div style="border:1.2px solid #C8CDD8;border-radius:10px;padding:6px 10px;background:white;font-size:10px;color:#1E2340;margin-bottom:6px;">'
+        +   '"Science, Minho," Dad answered with a big smile.'
+        + '</div>'
+        + '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;font-size:10px;color:#1E2340;text-align:center;">'
+        +   '<div>① (A)</div><div>② (B)</div><div>③ (C)</div><div>④ (D)</div><div>⑤ (E)</div>'
+        + '</div>';
+    }
+    // E12) Unscramble — 우리말 박스 + 빈칸 + 4개 단어 카드
+    if(tmplName === 'Unscramble'){
+      return ''
+        + '<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:8px;">'
+        +   '<span style="flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;background:#5C6BC0;color:white;border-radius:5px;font-size:10px;font-weight:800;margin-top:1px;">1</span>'
+        +   '<span style="font-size:12px;color:#1E2340;font-weight:700;">우리말 뜻에 어울리도록 문장을 완성해 보세요.</span>'
+        + '</div>'
+        + '<div style="border:2px solid #2196F3;border-radius:10px;padding:14px 16px;background:white;text-align:center;font-size:13px;font-weight:800;color:#1E2340;margin-bottom:14px;">'
+        +   '당신은 어디에서 왔나요?'
+        + '</div>'
+        + '<div style="border:1.5px solid #C8CDD8;border-radius:10px;padding:18px 16px;background:white;text-align:center;margin-bottom:14px;">'
+        +   '<span style="display:inline-block;width:42px;border-bottom:1.5px solid #1E2340;margin:0 4px;"></span>'
+        +   '<span style="display:inline-block;width:42px;border-bottom:1.5px solid #1E2340;margin:0 4px;"></span>'
+        +   '<span style="display:inline-block;width:42px;border-bottom:1.5px solid #1E2340;margin:0 4px;"></span>'
+        +   '<span style="display:inline-block;width:42px;border-bottom:1.5px solid #1E2340;margin:0 4px;"></span>'
+        +   '<span style="font-size:14px;color:#1E2340;font-weight:700;">?</span>'
+        + '</div>'
+        + '<div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;">'
+        +   '<div style="border:1.5px solid #C8CDD8;border-radius:6px;padding:7px 16px;background:white;font-size:12px;font-weight:700;color:#1E2340;">you</div>'
+        +   '<div style="border:1.5px solid #C8CDD8;border-radius:6px;padding:7px 16px;background:white;font-size:12px;font-weight:700;color:#1E2340;">Where</div>'
+        +   '<div style="border:1.5px solid #C8CDD8;border-radius:6px;padding:7px 16px;background:white;font-size:12px;font-weight:700;color:#1E2340;">from</div>'
+        +   '<div style="border:1.5px solid #C8CDD8;border-radius:6px;padding:7px 16px;background:white;font-size:12px;font-weight:700;color:#1E2340;">are</div>'
+        + '</div>';
+    }
+    // E13) OX형(초등) — 듣고 일치하면 O / X (헤드폰 + 브라질 국기 든 아이)
+    if(tmplName === 'OX형(초등)'){
+      return ''
+        + '<div style="background:linear-gradient(180deg,#A8DAFF,#D8ECFF);border-radius:12px;padding:14px;position:relative;overflow:hidden;">'
+        +   '<span style="position:absolute;left:8px;top:6px;font-size:18px;">☀️</span>'
+        +   '<div style="position:absolute;left:0;right:0;bottom:0;height:30px;background:linear-gradient(180deg,transparent,#9CD58F);"></div>'
+        +   '<div style="display:flex;align-items:center;gap:8px;background:#F0F9FF;border-radius:8px;padding:8px 14px;margin-bottom:14px;border:1.5px solid #BCE0FA;position:relative;z-index:1;">'
+        +     '<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:#2196F3;color:white;border-radius:5px;font-size:11px;font-weight:800;flex-shrink:0;">1</span>'
+        +     '<span style="font-size:11.5px;color:#1E2340;font-weight:700;">잘 듣고, 그림과 일치하면 <span style="color:#1E5BCC;font-weight:800;">O</span>, 일치하지 <span style="text-decoration:underline;font-weight:700;">않으면</span> <span style="color:#E53935;font-weight:800;">X</span>를 골라 보세요.</span>'
+        +   '</div>'
+        +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border:2px solid #2196F3;border-radius:10px;background:white;overflow:hidden;margin-bottom:14px;position:relative;z-index:1;">'
+        +     '<div style="aspect-ratio:2.4;display:flex;align-items:center;justify-content:center;font-size:30px;color:#2196F3;border-right:2px solid #2196F3;">🎧</div>'
+        +     '<div style="aspect-ratio:2.4;display:flex;align-items:center;justify-content:center;gap:4px;font-size:28px;">🧒🇧🇷</div>'
+        +   '</div>'
+        +   '<div style="display:flex;justify-content:center;gap:14px;position:relative;z-index:1;">'
+        +     '<div style="background:white;border:1.5px solid #BCE0FA;border-radius:10px;width:60px;height:60px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.08);">'
+        +       '<div style="width:30px;height:30px;border:4px solid #1E5BCC;border-radius:50%;"></div>'
+        +     '</div>'
+        +     '<div style="background:white;border:1.5px solid #BCE0FA;border-radius:10px;width:60px;height:60px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.08);font-size:36px;color:#E53935;font-weight:900;line-height:1;">✕</div>'
+        +   '</div>'
+        +   '<span style="position:absolute;left:6px;bottom:4px;font-size:18px;z-index:2;">🐹</span>'
+        + '</div>';
+    }
+    // E14) Unscramble(초등) — 점선 격자 배경 + 우리말 박스 + 주황 단어 카드 + 답안 박스
+    if(tmplName === 'Unscramble(초등)'){
+      return ''
+        + '<div style="background:#FFF6EC;background-image:radial-gradient(circle,#FFD8B0 1px,transparent 1px);background-size:8px 8px;border-radius:12px;padding:14px;">'
+        +   '<div style="display:flex;align-items:center;gap:8px;background:#FFE5C8;border-radius:8px;padding:7px 14px;margin-bottom:12px;">'
+        +     '<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;background:#FF7043;color:white;border-radius:5px;font-size:10px;font-weight:800;flex-shrink:0;">1</span>'
+        +     '<span style="font-size:11.5px;color:#1E2340;font-weight:700;">우리말 뜻에 어울리도록 문장을 완성해 보세요.</span>'
+        +   '</div>'
+        +   '<div style="background:white;border:2px solid #FF7043;border-radius:10px;padding:14px;text-align:center;font-size:13px;color:#1E2340;font-weight:600;margin-bottom:14px;">'
+        +     '당신은 어디에서 왔나요?'
+        +   '</div>'
+        +   '<div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'
+        +     '<div style="background:#FF7043;color:white;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:800;">are</div>'
+        +     '<div style="background:#FF7043;color:white;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:800;">from?</div>'
+        +     '<div style="background:#FF7043;color:white;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:800;">you</div>'
+        +     '<div style="background:#FF7043;color:white;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:800;">Where</div>'
+        +   '</div>'
+        +   '<div style="background:white;border:2px solid #2196F3;border-radius:10px;padding:18px 16px;text-align:center;">'
+        +     '<span style="display:inline-block;width:36px;border-bottom:1.5px solid #1E2340;margin:0 4px;"></span>'
+        +     '<span style="display:inline-block;width:36px;border-bottom:1.5px solid #1E2340;margin:0 4px;"></span>'
+        +     '<span style="display:inline-block;width:36px;border-bottom:1.5px solid #1E2340;margin:0 4px;"></span>'
+        +     '<span style="display:inline-block;width:36px;border-bottom:1.5px solid #1E2340;margin:0 4px;"></span>'
+        +   '</div>'
+        + '</div>';
+    }
+  }
+
+  // [ADDED 2026-04] 수학 담당 — 사실적 미리보기 (사용자 요청, 첨부 이미지 기준)
+  if(!isEng){
+    if(tmplName === '빈 문서'){
+      return ''
+        + '<div style="display:flex;align-items:center;gap:8px;padding:6px 14px;background:linear-gradient(90deg,#1B5E2A,#2E7D44);border-radius:8px 8px 0 0;color:white;font-weight:800;font-size:12px;margin:-16px -16px 0;">'
+        +   '<span>📘 교과서 개념 정리</span>'
+        +   '<span style="font-size:14px;">🧑‍🏫</span>'
+        + '</div>'
+        + '<div style="border:2px solid #2E7D44;border-top:none;border-radius:0 0 10px 10px;padding:16px;background:white;">'
+        +   '<div style="font-weight:800;font-size:13px;color:#1E2340;margin-bottom:10px;">함수의 그래프의 <i>x</i>절편과 <i>y</i>절편</div>'
+        +   '<div style="display:grid;grid-template-columns:1fr 0.7fr;gap:14px;align-items:start;">'
+        +     '<div style="font-size:11.5px;color:#1E2340;line-height:1.85;">'
+        +       '함수의 그래프에서<br>'
+        +       '<b><i>x</i>절편</b>: 그래프가 <i>x</i>축과 만나는 점의 <i>x</i>좌표<br>'
+        +       '<b><i>y</i>절편</b>: 그래프가 <i>y</i>축과 만나는 점의 <i>y</i>좌표<br>'
+        +       '<span style="display:inline-block;background:#2E7D44;color:white;font-size:9px;font-weight:800;padding:1px 5px;border-radius:50%;margin-right:3px;">예</span>'
+        +       '일차함수 <i>y</i> = <sup>4</sup>⁄<sub>3</sub><i>x</i> − 4의 그래프에서 <i>x</i>절편은 <b>3</b>이고 <i>y</i>절편은 <b>−4</b>이다.'
+        +     '</div>'
+        +     '<svg viewBox="0 0 140 130" style="width:100%;height:auto;">'
+        +       '<line x1="20" y1="65" x2="125" y2="65" stroke="#1E2340" stroke-width="1.2"/>'
+        +       '<polygon points="125,65 119,62 119,68" fill="#1E2340"/>'
+        +       '<text x="128" y="69" font-size="9" fill="#1E2340" font-style="italic">x</text>'
+        +       '<line x1="55" y1="120" x2="55" y2="15" stroke="#1E2340" stroke-width="1.2"/>'
+        +       '<polygon points="55,15 52,21 58,21" fill="#1E2340"/>'
+        +       '<text x="48" y="13" font-size="9" fill="#1E2340" font-style="italic">y</text>'
+        +       '<text x="42" y="64" font-size="8" fill="#1E2340">O</text>'
+        +       '<line x1="35" y1="110" x2="115" y2="25" stroke="#E91E63" stroke-width="2"/>'
+        +       '<rect x="68" y="56" width="20" height="14" rx="3" fill="#FFE0E6" stroke="#E91E63" stroke-width="0.8"/>'
+        +       '<text x="78" y="65" text-anchor="middle" font-size="7" fill="#1E2340" font-weight="700">x절편</text>'
+        +       '<text x="80" y="60" font-size="8" fill="#1E2340">3</text>'
+        +       '<rect x="20" y="78" width="22" height="14" rx="3" fill="#E0F4FF" stroke="#42A5F5" stroke-width="0.8"/>'
+        +       '<text x="31" y="87" text-anchor="middle" font-size="7" fill="#1E2340" font-weight="700">y절편</text>'
+        +       '<text x="40" y="100" font-size="8" fill="#1E2340">−4</text>'
+        +       '<text x="100" y="105" font-size="7" fill="#1E2340" font-style="italic">y=⁴⁄₃x−4</text>'
+        +     '</svg>'
+        +   '</div>'
+        + '</div>';
+    }
+    if(tmplName === '선택형' || tmplName === '선택형 활동'){
+      return ''
+        + '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px;">'
+        +   '<span style="flex-shrink:0;display:inline-block;padding:4px 10px;background:#1A2545;color:white;border-radius:6px;font-size:11px;font-weight:800;">문제 3</span>'
+        +   '<span style="font-size:12.5px;color:#1E2340;line-height:1.6;font-weight:600;">다음 중 △ABC와 △DEF가 서로 닮은 도형이 되기 위해 추가되어야 하는 조건은?</span>'
+        + '</div>'
+        + '<div style="display:flex;gap:6px;margin-left:54px;margin-bottom:14px;">'
+        +   '<span style="width:8px;height:8px;border-radius:50%;background:#E91E63;display:inline-block;"></span>'
+        +   '<span style="width:8px;height:8px;border-radius:50%;background:#E91E63;display:inline-block;"></span>'
+        +   '<span style="width:8px;height:8px;border-radius:50%;border:1.5px solid #E91E63;display:inline-block;"></span>'
+        + '</div>'
+        + '<div style="display:flex;justify-content:center;gap:30px;align-items:flex-end;margin:14px 0;padding:8px 0;">'
+        +   '<svg viewBox="0 0 100 80" style="width:100px;height:auto;">'
+        +     '<polygon points="50,8 80,68 20,68" fill="none" stroke="#1E2340" stroke-width="1.5"/>'
+        +     '<text x="50" y="6" text-anchor="middle" font-size="9" fill="#1E2340" font-weight="700">A</text>'
+        +     '<text x="14" y="76" font-size="9" fill="#1E2340" font-weight="700">B</text>'
+        +     '<text x="84" y="76" font-size="9" fill="#1E2340" font-weight="700">C</text>'
+        +     '<text x="32" y="62" font-size="6" fill="#1E2340">50°</text>'
+        +     '<text x="50" y="78" text-anchor="middle" font-size="7" fill="#1E2340">8 cm</text>'
+        +   '</svg>'
+        +   '<svg viewBox="0 0 80 60" style="width:75px;height:auto;">'
+        +     '<polygon points="40,10 60,52 20,52" fill="none" stroke="#1E2340" stroke-width="1.5"/>'
+        +     '<text x="40" y="8" text-anchor="middle" font-size="8" fill="#1E2340" font-weight="700">D</text>'
+        +     '<text x="14" y="58" font-size="8" fill="#1E2340" font-weight="700">E</text>'
+        +     '<text x="64" y="58" font-size="8" fill="#1E2340" font-weight="700">F</text>'
+        +     '<text x="28" y="48" font-size="6" fill="#1E2340">50°</text>'
+        +     '<text x="40" y="60" text-anchor="middle" font-size="7" fill="#1E2340">4 cm</text>'
+        +   '</svg>'
+        + '</div>'
+        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;font-size:11.5px;color:#1E2340;line-height:1.7;">'
+        +   '<div>① ∠A = 60°, ∠F = 50°</div>'
+        +   '<div>② ∠C = 65°, ∠D = 70°</div>'
+        +   '<div>③ AC = 6 cm, DF = 3 cm</div>'
+        +   '<div>④ AB = 12 cm, DE = 6 cm</div>'
+        +   '<div>⑤ AB = 10 cm, DF = 5 cm</div>'
+        + '</div>';
+    }
+    if(tmplName === '단답형' || tmplName === '단답형 활동'){
+      return ''
+        + '<div style="margin-bottom:10px;">'
+        +   '<span style="display:inline-block;padding:4px 12px;background:#7C4DFF;color:white;border-radius:6px;font-size:11px;font-weight:800;">문제 5</span>'
+        +   '<div style="height:1px;background:#7C4DFF;margin-top:6px;opacity:0.5;"></div>'
+        + '</div>'
+        + '<div style="display:grid;grid-template-columns:1.4fr 1fr;gap:12px;align-items:start;">'
+        +   '<div style="font-size:12px;color:#1E2340;line-height:1.85;">'
+        +     '어느 떡볶이 가게에서는 떡과 소스를 골라 떡볶이를 주문할 수 있다고 한다. '
+        +     '떡은 밀떡, 쌀떡의 <b>2가지</b>, 소스는 고추장, 간장, 짜장, 크림의 <b>4가지</b>가 있을 때, '
+        +     '이 중에서 떡과 소스를 각각 하나씩 골라 주문하는 경우의 수를 구하시오.'
+        +   '</div>'
+        +   '<div style="border:1.5px solid #FFD89A;border-radius:8px;padding:8px;background:#FFFAF0;">'
+        +     '<div style="display:flex;gap:4px;justify-content:center;margin-bottom:6px;">'
+        +       '<span style="width:10px;height:10px;background:#FF7043;border-radius:50%;"></span>'
+        +       '<span style="width:10px;height:10px;background:#43A047;border-radius:50%;"></span>'
+        +       '<span style="width:10px;height:10px;background:#FF7043;border-radius:50%;"></span>'
+        +       '<span style="width:10px;height:10px;background:#43A047;border-radius:50%;"></span>'
+        +     '</div>'
+        +     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;color:#1E2340;text-align:center;">'
+        +       '<div>'
+        +         '<div style="display:inline-block;padding:2px 10px;background:#FFD89A;border-radius:10px;font-weight:700;margin-bottom:4px;">떡</div>'
+        +         '<div>밀떡</div><div>쌀떡</div>'
+        +       '</div>'
+        +       '<div>'
+        +         '<div style="display:inline-block;padding:2px 10px;background:#FFD89A;border-radius:10px;font-weight:700;margin-bottom:4px;">소스</div>'
+        +         '<div>고추장</div><div>간장</div><div>짜장</div><div>크림</div>'
+        +       '</div>'
+        +     '</div>'
+        +     '<div style="text-align:center;font-size:14px;margin-top:6px;">🌭 🍢</div>'
+        +   '</div>'
+        + '</div>'
+        + '<div style="margin-top:14px;border:1.5px solid #E5E7EB;border-radius:6px;padding:8px 14px;background:#FAFBFF;color:#9CA3AF;font-size:11.5px;">답: ___</div>';
+    }
+    if(tmplName === '서술형 활동'){
+      return ''
+        + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
+        +   '<span style="display:inline-block;padding:4px 10px;background:linear-gradient(90deg,#A8E6A3,#66BB6A);color:white;border-radius:6px;font-size:11px;font-weight:800;">서술형 문제</span>'
+        +   '<span style="font-size:11px;color:#666;">문제의 풀이 과정과 답을 쓰시오.</span>'
+        + '</div>'
+        + '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;">'
+        +   '<span style="flex-shrink:0;display:inline-block;padding:4px 10px;background:#1A2545;color:white;border-radius:6px;font-size:11px;font-weight:800;">문제 4</span>'
+        +   '<div>'
+        +     '<span style="font-size:12px;color:#1E2340;line-height:1.7;">다음 그림과 같이 4등분, 5등분한 서로 다른 두 원판 A, B에 각각 1부터 4까지, 5부터 9까지의 자연수가 적혀 있다. 두 원판을 돌린 후 멈추었을 때, 두 원판의 각 바늘이 가리키는 수의 합이 8 또는 10인 경우의 수를 구하시오.</span>'
+        +     '<div style="font-size:10.5px;color:#9CA3AF;margin-top:4px;">(단, 바늘이 경계선을 가리키는 경우는 생각하지 않는다.)</div>'
+        +     '<div style="display:flex;gap:4px;margin-top:6px;">'
+        +       '<span style="width:7px;height:7px;border-radius:50%;background:#E91E63;"></span>'
+        +       '<span style="width:7px;height:7px;border-radius:50%;background:#E91E63;"></span>'
+        +       '<span style="width:7px;height:7px;border-radius:50%;border:1.2px solid #E91E63;"></span>'
+        +     '</div>'
+        +   '</div>'
+        + '</div>'
+        + '<div style="display:flex;justify-content:center;gap:30px;margin:14px 0;">'
+        +   '<svg viewBox="0 0 80 80" style="width:80px;height:80px;">'
+        +     '<circle cx="40" cy="40" r="32" fill="white" stroke="#A8D8B0" stroke-width="2"/>'
+        +     '<line x1="40" y1="8" x2="40" y2="72" stroke="#1E2340" stroke-width="0.7"/>'
+        +     '<line x1="8" y1="40" x2="72" y2="40" stroke="#1E2340" stroke-width="0.7"/>'
+        +     '<path d="M 40 40 L 40 8 A 32 32 0 0 1 72 40 Z" fill="#FFF59D" opacity="0.6"/>'
+        +     '<path d="M 40 40 L 72 40 A 32 32 0 0 1 40 72 Z" fill="#E1BEE7" opacity="0.5"/>'
+        +     '<path d="M 40 40 L 40 72 A 32 32 0 0 1 8 40 Z" fill="#FFCDD2" opacity="0.5"/>'
+        +     '<path d="M 40 40 L 8 40 A 32 32 0 0 1 40 8 Z" fill="#B3E5FC" opacity="0.5"/>'
+        +     '<text x="40" y="22" text-anchor="middle" font-size="10" fill="#1E2340" font-weight="700">1</text>'
+        +     '<text x="58" y="44" text-anchor="middle" font-size="10" fill="#1E2340" font-weight="700">2</text>'
+        +     '<text x="40" y="62" text-anchor="middle" font-size="10" fill="#1E2340" font-weight="700">3</text>'
+        +     '<text x="22" y="44" text-anchor="middle" font-size="10" fill="#1E2340" font-weight="700">4</text>'
+        +     '<circle cx="40" cy="40" r="2.2" fill="#43A047"/>'
+        +     '<text x="40" y="78" text-anchor="middle" font-size="10" fill="#1E2340" font-weight="700">A</text>'
+        +   '</svg>'
+        +   '<svg viewBox="0 0 80 80" style="width:80px;height:80px;">'
+        +     '<circle cx="40" cy="40" r="32" fill="white" stroke="#A8D8B0" stroke-width="2"/>'
+        +     '<g stroke="#1E2340" stroke-width="0.7" fill="none">'
+        +       '<line x1="40" y1="8" x2="40" y2="40"/>'
+        +       '<line x1="40" y1="40" x2="70.5" y2="49.9"/>'
+        +       '<line x1="40" y1="40" x2="58.8" y2="65.9"/>'
+        +       '<line x1="40" y1="40" x2="21.2" y2="65.9"/>'
+        +       '<line x1="40" y1="40" x2="9.5" y2="49.9"/>'
+        +     '</g>'
+        +     '<text x="40" y="22" text-anchor="middle" font-size="10" fill="#1E2340" font-weight="700">5</text>'
+        +     '<text x="60" y="42" text-anchor="middle" font-size="10" fill="#1E2340" font-weight="700">6</text>'
+        +     '<text x="50" y="60" text-anchor="middle" font-size="10" fill="#1E2340" font-weight="700">7</text>'
+        +     '<text x="30" y="60" text-anchor="middle" font-size="10" fill="#1E2340" font-weight="700">8</text>'
+        +     '<text x="20" y="42" text-anchor="middle" font-size="10" fill="#1E2340" font-weight="700">9</text>'
+        +     '<circle cx="40" cy="40" r="2.2" fill="#43A047"/>'
+        +     '<text x="40" y="78" text-anchor="middle" font-size="10" fill="#1E2340" font-weight="700">B</text>'
+        +   '</svg>'
+        + '</div>'
+        + '<div style="border:1px solid #E5E7EB;border-radius:8px;padding:14px;background:#FAFBFF;min-height:50px;color:#9CA3AF;font-size:11px;">풀이 과정을 작성하는 영역</div>';
+    }
+    // 5) OX형 — "잠깐! 퀴즈" 박스 + O/X 큰 버튼
+    if(tmplName === 'OX형'){
+      return ''
+        + '<div style="display:inline-block;padding:5px 14px;background:#7B2C2C;color:white;border-radius:6px 6px 0 0;font-size:11px;font-weight:800;">잠깐! 퀴즈</div>'
+        + '<div style="border:1.5px solid #7B2C2C;border-radius:0 8px 8px 8px;padding:14px;background:white;">'
+        +   '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#1E2340;font-weight:600;margin-bottom:14px;">'
+        +     '<span style="color:#FF7043;">▶</span>'
+        +     '<span>다음 설명이 옳으면 <span style="color:#E91E63;font-weight:800;">○</span>, 틀리면 <span style="color:#E91E63;font-weight:800;">✕</span>를 하세요.</span>'
+        +   '</div>'
+        +   '<div style="border:1.5px solid #E5E7EB;border-radius:10px;padding:16px;background:#FAFBFF;text-align:center;font-size:12px;color:#1E2340;line-height:1.7;">'
+        +     '구에서 가장 바깥쪽에 있는 점을 구의 중심이라고 합니다.'
+        +   '</div>'
+        +   '<div style="display:flex;justify-content:center;gap:60px;margin-top:18px;">'
+        +     '<div style="width:50px;height:50px;border:5px solid #7E848C;border-radius:50%;"></div>'
+        +     '<div style="width:50px;height:50px;display:flex;align-items:center;justify-content:center;font-size:50px;color:#7E848C;font-weight:900;line-height:1;">✕</div>'
+        +   '</div>'
+        + '</div>';
+    }
+    // 6) TF형 — 기초/기본/도전 탭 + 그래프 + 3개 OX 문항
+    if(tmplName === 'TF형'){
+      return ''
+        + '<div style="display:flex;gap:0;border-bottom:2px solid #5DADE2;margin-bottom:10px;">'
+        +   '<span style="padding:6px 14px;background:#E0F2FF;color:#1E5A8A;border-radius:8px 8px 0 0;font-size:11px;font-weight:800;border:1.5px solid #5DADE2;border-bottom:none;">기초 문제</span>'
+        +   '<span style="padding:6px 14px;color:#9CA3AF;font-size:11px;font-weight:600;">기본 문제</span>'
+        +   '<span style="padding:6px 14px;color:#9CA3AF;font-size:11px;font-weight:600;">도전 문제</span>'
+        + '</div>'
+        + '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px;">'
+        +   '<span style="flex-shrink:0;display:inline-block;padding:3px 8px;background:#5DADE2;color:white;border-radius:5px;font-size:10.5px;font-weight:800;">문제 4</span>'
+        +   '<span style="font-size:11.5px;color:#1E2340;line-height:1.6;">다음 그래프는 하늘을 날고 있는 어느 독수리의 속력을 시간에 따라 나타낸 것이다. 이 그래프의 각 구간에 대한 설명이 옳으면 ○표, 옳지 않으면 ×표를 선택하시오.</span>'
+        + '</div>'
+        + '<div style="display:flex;justify-content:center;margin:10px 0;">'
+        +   '<svg viewBox="0 0 180 90" style="width:200px;height:auto;">'
+        +     '<text x="14" y="18" font-size="8" fill="#1E2340">속</text><text x="14" y="28" font-size="8" fill="#1E2340">력</text>'
+        +     '<line x1="28" y1="14" x2="28" y2="78" stroke="#1E2340" stroke-width="0.7"/>'
+        +     '<polygon points="28,14 25,18 31,18" fill="#1E2340"/>'
+        +     '<line x1="28" y1="78" x2="170" y2="78" stroke="#1E2340" stroke-width="0.7"/>'
+        +     '<polygon points="170,78 166,75 166,81" fill="#1E2340"/>'
+        +     '<text x="22" y="83" font-size="7" fill="#1E2340">O</text><text x="155" y="86" font-size="7" fill="#1E2340">시간</text>'
+        +     '<line x1="60" y1="20" x2="60" y2="78" stroke="#9CA3AF" stroke-width="0.6" stroke-dasharray="2 2"/>'
+        +     '<line x1="110" y1="20" x2="110" y2="78" stroke="#9CA3AF" stroke-width="0.6" stroke-dasharray="2 2"/>'
+        +     '<line x1="145" y1="20" x2="145" y2="78" stroke="#9CA3AF" stroke-width="0.6" stroke-dasharray="2 2"/>'
+        +     '<text x="44" y="22" font-size="7" fill="#1E2340">(1)</text>'
+        +     '<text x="80" y="22" font-size="7" fill="#1E2340">(2)</text>'
+        +     '<text x="124" y="22" font-size="7" fill="#1E2340">(3)</text>'
+        +     '<polyline points="28,55 60,55 110,30 145,68" fill="none" stroke="#E91E63" stroke-width="2"/>'
+        +   '</svg>'
+        + '</div>'
+        + '<div style="display:flex;flex-direction:column;gap:6px;font-size:11px;color:#1E2340;">'
+        +   '<div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #F0F0F0;padding-bottom:5px;"><span>(1) 독수리가 움직이지 않고 있다.</span><span style="display:flex;gap:6px;flex-shrink:0;"><span style="width:18px;height:18px;border:1.2px solid #C8CDD8;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;">O</span><span style="width:18px;height:18px;border:1.2px solid #C8CDD8;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;">X</span></span></div>'
+        +   '<div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #F0F0F0;padding-bottom:5px;"><span>(2) 독수리가 속력을 높이고 있다.</span><span style="display:flex;gap:6px;flex-shrink:0;"><span style="width:18px;height:18px;border:1.2px solid #C8CDD8;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;">O</span><span style="width:18px;height:18px;border:1.2px solid #C8CDD8;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;">X</span></span></div>'
+        +   '<div style="display:flex;align-items:center;justify-content:space-between;"><span>(3) 독수리가 속력을 낮추고 있다.</span><span style="display:flex;gap:6px;flex-shrink:0;"><span style="width:18px;height:18px;border:1.2px solid #C8CDD8;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;">O</span><span style="width:18px;height:18px;border:1.2px solid #C8CDD8;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;">X</span></span></div>'
+        + '</div>';
+    }
+    // 7) 순서입력형 — 10000씩 뛰어 세기
+    if(tmplName === '순서입력형'){
+      return ''
+        + '<div style="display:inline-block;padding:5px 14px;background:#7B2C2C;color:white;border-radius:6px 6px 0 0;font-size:11px;font-weight:800;">잠깐! 퀴즈</div>'
+        + '<div style="border:1.5px solid #7B2C2C;border-radius:0 8px 8px 8px;padding:14px 16px;background:white;">'
+        +   '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#1E2340;font-weight:600;margin-bottom:14px;">'
+        +     '<span style="color:#FF7043;">▶</span>'
+        +     '<span>10000씩 뛰어 세기를 할 때, 작은 수부터 차례대로 선택해 보세요.</span>'
+        +   '</div>'
+        +   '<div style="display:flex;flex-direction:column;gap:10px;padding-left:8px;">'
+        +     '<div style="display:flex;align-items:center;gap:14px;"><span style="display:inline-block;padding:4px 10px;border:1.2px solid #C8CDD8;border-radius:6px;font-size:10.5px;color:#555E75;font-weight:600;">선택</span><span style="font-size:14px;color:#1E2340;font-style:italic;">59024</span></div>'
+        +     '<div style="display:flex;align-items:center;gap:14px;"><span style="display:inline-block;padding:4px 10px;border:1.2px solid #C8CDD8;border-radius:6px;font-size:10.5px;color:#555E75;font-weight:600;">선택</span><span style="font-size:14px;color:#1E2340;font-style:italic;">69024</span></div>'
+        +     '<div style="display:flex;align-items:center;gap:14px;"><span style="display:inline-block;padding:4px 10px;border:1.2px solid #C8CDD8;border-radius:6px;font-size:10.5px;color:#555E75;font-weight:600;">선택</span><span style="font-size:14px;color:#1E2340;font-style:italic;">49024</span></div>'
+        +     '<div style="display:flex;align-items:center;gap:14px;"><span style="display:inline-block;padding:4px 10px;border:1.2px solid #C8CDD8;border-radius:6px;font-size:10.5px;color:#555E75;font-weight:600;">선택</span><span style="font-size:14px;color:#1E2340;font-style:italic;">79024</span></div>'
+        +   '</div>'
+        + '</div>';
+    }
+    // 8) 순서조합형 — 계산 결과가 큰 순서대로
+    if(tmplName === '순서조합형'){
+      return ''
+        + '<div style="display:inline-block;padding:5px 14px;background:#7B2C2C;color:white;border-radius:6px 6px 0 0;font-size:11px;font-weight:800;">잠깐! 퀴즈</div>'
+        + '<div style="border:1.5px solid #7B2C2C;border-radius:0 8px 8px 8px;padding:14px 16px;background:white;">'
+        +   '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#1E2340;font-weight:600;margin-bottom:14px;">'
+        +     '<span style="color:#FF7043;">▶</span>'
+        +     '<span>계산 결과가 큰 순서대로 나열해 보세요.</span>'
+        +   '</div>'
+        +   '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">'
+        +     '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;"><div style="width:100%;padding:10px 8px;border:1px solid #E5E7EB;border-radius:8px;background:#F9FAFB;text-align:center;font-size:13px;color:#1E2340;font-style:italic;">153 + 227</div><div style="display:flex;gap:4px;"><span style="display:inline-block;padding:3px 5px;background:#E5E7FF;border-radius:4px;color:#3949AB;font-size:9px;font-weight:800;">◀◀</span><span style="display:inline-block;padding:3px 5px;background:#E5E7FF;border-radius:4px;color:#3949AB;font-size:9px;font-weight:800;">▶▶</span></div></div>'
+        +     '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;"><div style="width:100%;padding:10px 8px;border:1px solid #E5E7EB;border-radius:8px;background:#F9FAFB;text-align:center;font-size:13px;color:#1E2340;font-style:italic;">553 − 122</div><div style="display:flex;gap:4px;"><span style="display:inline-block;padding:3px 5px;background:#E5E7FF;border-radius:4px;color:#3949AB;font-size:9px;font-weight:800;">◀◀</span><span style="display:inline-block;padding:3px 5px;background:#E5E7FF;border-radius:4px;color:#3949AB;font-size:9px;font-weight:800;">▶▶</span></div></div>'
+        +     '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;"><div style="width:100%;padding:10px 8px;border:1px solid #E5E7EB;border-radius:8px;background:#F9FAFB;text-align:center;font-size:13px;color:#1E2340;font-style:italic;">624 − 253</div><div style="display:flex;gap:4px;"><span style="display:inline-block;padding:3px 5px;background:#E5E7FF;border-radius:4px;color:#3949AB;font-size:9px;font-weight:800;">◀◀</span><span style="display:inline-block;padding:3px 5px;background:#E5E7FF;border-radius:4px;color:#3949AB;font-size:9px;font-weight:800;">▶▶</span></div></div>'
+        +   '</div>'
+        + '</div>';
+    }
+    // 9) 연결형 — 분수↔소수, 유한/무한 분류
+    if(tmplName === '연결형'){
+      var fracBox = 'background:#D4ECFF;border-radius:8px;padding:8px 12px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#1E2340;min-height:36px;';
+      var decBox  = 'background:#FFE4D5;border-radius:8px;padding:8px 12px;display:flex;align-items:center;justify-content:center;font-size:11.5px;color:#1E2340;min-height:36px;';
+      var catBox  = 'background:#D6F0D8;border-radius:8px;padding:8px 14px;display:flex;align-items:center;justify-content:center;font-size:11.5px;color:#1E2340;min-height:30px;';
+      var dot = '<span style="width:6px;height:6px;border-radius:50%;background:#7E848C;display:inline-block;flex-shrink:0;"></span>';
+      return ''
+        + '<div style="margin-bottom:10px;">'
+        +   '<span style="display:inline-block;padding:4px 12px;background:#7C4DFF;color:white;border-radius:6px;font-size:11px;font-weight:800;">문제 1</span>'
+        +   '<div style="height:1px;background:#7C4DFF;margin-top:6px;opacity:0.5;"></div>'
+        + '</div>'
+        + '<div style="font-size:12px;color:#1E2340;line-height:1.6;margin-bottom:14px;">다음 분수를 소수로 나타내고, 유한소수와 무한소수로 구분하여 알맞게 짝 지으시오.</div>'
+        + '<div style="display:grid;grid-template-columns:1fr 14px 1.2fr 14px 0.9fr;gap:6px 4px;align-items:center;">'
+        +   '<div style="'+fracBox+'"><span style="display:inline-flex;flex-direction:column;align-items:center;line-height:1.1;"><span>2</span><span style="border-top:1px solid #1E2340;padding-top:1px;">3</span></span></div>'
+        +   '<div style="display:flex;justify-content:space-between;align-items:center;">'+dot+dot+'</div>'
+        +   '<div style="'+decBox+'">1.125</div>'
+        +   '<div style="display:flex;justify-content:space-between;align-items:center;">'+dot+dot+'</div>'
+        +   '<div style="'+catBox+'">유한소수</div>'
+        +   '<div style="'+fracBox+'"><span style="display:inline-flex;flex-direction:column;align-items:center;line-height:1.1;"><span>9</span><span style="border-top:1px solid #1E2340;padding-top:1px;">8</span></span></div>'
+        +   '<div style="display:flex;justify-content:space-between;align-items:center;">'+dot+dot+'</div>'
+        +   '<div style="'+decBox+'">0.636363···</div>'
+        +   '<div style="display:flex;justify-content:space-between;align-items:center;">'+dot+'</div>'
+        +   '<div></div>'
+        +   '<div style="'+fracBox+'"><span style="display:inline-flex;flex-direction:column;align-items:center;line-height:1.1;"><span>7</span><span style="border-top:1px solid #1E2340;padding-top:1px;">11</span></span></div>'
+        +   '<div style="display:flex;justify-content:space-between;align-items:center;">'+dot+dot+'</div>'
+        +   '<div style="'+decBox+'">−0.325</div>'
+        +   '<div style="display:flex;justify-content:space-between;align-items:center;">'+dot+dot+'</div>'
+        +   '<div style="'+catBox+'">무한소수</div>'
+        +   '<div style="'+fracBox+'"><span style="display:inline-flex;align-items:center;gap:2px;">−<span style="display:inline-flex;flex-direction:column;align-items:center;line-height:1.1;"><span>13</span><span style="border-top:1px solid #1E2340;padding-top:1px;">40</span></span></span></div>'
+        +   '<div style="display:flex;justify-content:space-between;align-items:center;">'+dot+dot+'</div>'
+        +   '<div style="'+decBox+'">0.666···</div>'
+        +   '<div style="display:flex;justify-content:space-between;align-items:center;">'+dot+'</div>'
+        +   '<div></div>'
+        + '</div>';
+    }
+    // 10) 연쇄형 / 연쇄형 활동 — 직육면체 도형 + 두 단계 ㄱ~ㅂ 객관식 + 힌트/해설/확인 토글
+    if(tmplName === '연쇄형' || tmplName === '연쇄형 활동'){
+      var stageHtml = function(stageNum, subQuestion){
+        var marks = ['㉠','㉡','㉢','㉣','㉤','㉥'];
+        var faces = ['면 ABCD','면 AEFB','면 AEHD','면 BFGC','면 CDHG','면 EFGH'];
+        var optionRows = '';
+        for(var r = 0; r < 2; r++){
+          optionRows += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 16px;font-size:11.5px;color:#1E2340;margin-bottom:6px;">';
+          for(var c = 0; c < 3; c++){
+            var idx = r*3 + c;
+            optionRows += '<div><span style="color:#7C4DFF;font-weight:700;margin-right:3px;">'+marks[idx]+'</span> '+faces[idx]+'</div>';
+          }
+          optionRows += '</div>';
+        }
+        return ''
+          + '<div style="margin-bottom:8px;font-size:12px;color:#1E2340;font-weight:600;">('+stageNum+') '+subQuestion+'</div>'
+          + '<div style="padding-left:14px;margin-bottom:10px;">'+optionRows+'</div>'
+          + '<div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px;">'
+          +   '<div style="background:#EEF1FF;border-radius:6px;padding:7px 12px;display:flex;align-items:center;justify-content:space-between;font-size:11px;color:#4B6EF5;font-weight:700;">'
+          +     '<span style="display:flex;align-items:center;gap:6px;"><span>💡</span><span>힌트</span></span>'
+          +     '<span style="color:#9CA3AF;font-size:10px;">▼</span>'
+          +   '</div>'
+          +   '<div style="background:#EEF1FF;border-radius:6px;padding:7px 12px;display:flex;align-items:center;justify-content:space-between;font-size:11px;color:#4B6EF5;font-weight:700;">'
+          +     '<span style="display:flex;align-items:center;gap:6px;"><span>📋</span><span>해설</span></span>'
+          +     '<span style="color:#9CA3AF;font-size:10px;">▼</span>'
+          +   '</div>'
+          + '</div>'
+          + '<div style="display:flex;justify-content:flex-end;">'
+          +   '<button style="background:#4B6EF5;color:white;border:none;border-radius:5px;padding:5px 14px;font-size:10.5px;font-weight:700;font-family:\'Noto Sans KR\',sans-serif;">확인하기</button>'
+          + '</div>';
+      };
+
+      return ''
+        + '<div style="margin-bottom:10px;">'
+        +   '<span style="display:inline-block;padding:4px 12px;background:#7C4DFF;color:white;border-radius:6px;font-size:11px;font-weight:800;">문제 6</span>'
+        +   '<div style="height:1px;background:#7C4DFF;margin-top:6px;opacity:0.5;"></div>'
+        + '</div>'
+        + '<div style="font-size:12px;color:#1E2340;line-height:1.6;margin-bottom:10px;">아래의 직육면체에서 다음을 모두 구하시오.</div>'
+        + '<div style="display:flex;justify-content:center;margin-bottom:14px;">'
+        +   '<svg viewBox="0 0 180 110" style="width:200px;height:auto;">'
+        +     '<line x1="40" y1="35" x2="120" y2="35" stroke="#1E2340" stroke-width="0.7" stroke-dasharray="2 2"/>'
+        +     '<line x1="40" y1="35" x2="40" y2="85" stroke="#1E2340" stroke-width="0.7" stroke-dasharray="2 2"/>'
+        +     '<line x1="40" y1="85" x2="120" y2="85" stroke="#1E2340" stroke-width="0.7" stroke-dasharray="2 2"/>'
+        +     '<polygon points="55,20 145,20 145,75 55,75" fill="#D9ECC0" stroke="#7CB342" stroke-width="1"/>'
+        +     '<polygon points="40,35 120,35 145,20 55,20" fill="#C5E0A0" stroke="#7CB342" stroke-width="1"/>'
+        +     '<polygon points="145,20 145,75 120,85 120,35" fill="#A8CC85" stroke="#7CB342" stroke-width="1"/>'
+        +     '<text x="56" y="18" font-size="9" fill="#1E2340" font-weight="700">D</text>'
+        +     '<text x="143" y="18" font-size="9" fill="#1E2340" font-weight="700">C</text>'
+        +     '<text x="32" y="38" font-size="9" fill="#1E2340" font-weight="700">A</text>'
+        +     '<text x="148" y="38" font-size="9" fill="#1E2340" font-weight="700">B</text>'
+        +     '<text x="148" y="86" font-size="9" fill="#1E2340" font-weight="700">G</text>'
+        +     '<text x="118" y="92" font-size="9" fill="#1E2340" font-weight="700">F</text>'
+        +     '<text x="32" y="92" font-size="9" fill="#1E2340" font-weight="700">E</text>'
+        +     '<text x="76" y="40" font-size="9" fill="#1E2340" font-weight="700">H</text>'
+        +   '</svg>'
+        + '</div>'
+        + stageHtml(1, '모서리 AB를 포함하는 면')
+        + '<div style="height:18px;"></div>'
+        + stageHtml(2, '모서리 BF와 평행한 면');
+    }
+  }
+
+  var qBox = 'border:1.5px dashed #CBD5E1;border-radius:8px;padding:10px 12px;font-size:12px;color:#1E2340;background:#FAFBFF;line-height:1.6;';
+  var labelBadge = function(t,c){ return '<span style="display:inline-block;padding:2px 8px;border-radius:6px;background:'+c+';color:white;font-size:10px;font-weight:800;margin-right:6px;">'+t+'</span>'; };
+
+  var content = {
+    '선택형': {
+      english: { q:'다음 그림에 알맞은 단어를 고르세요.', items:['① cat', '② dog', '③ bird', '④ fish'], ans:'① cat' },
+      math:    { q:'25 + 17의 값으로 알맞은 것을 고르세요.', items:['① 32', '② 42', '③ 52', '④ 62'], ans:'② 42' }
+    },
+    '단답형': {
+      english: { q:'빈칸에 알맞은 단어를 영어로 쓰세요.', sub:'I have a ____ . (개)', ans:'dog' },
+      math:    { q:'다음 식의 값을 구하세요.', sub:'48 - 19 = ?', ans:'29' }
+    },
+    '연쇄형': {
+      english: { q:'다음 대화를 읽고 물음에 답하세요.', subs:['(1) 그림에 알맞은 표현은?', '(2) 이어질 대답으로 알맞은 것은?'] },
+      math:    { q:'직사각형의 둘레를 구해 봅시다.', subs:['(1) 가로와 세로의 길이는?', '(2) 둘레는 몇 cm인가?'] }
+    },
+    'OX형': {
+      english: { q:"A: How are you?  B: I'm fine, thanks. — 자연스러운 대화이다.", ans:'O' },
+      math:    { q:'7 × 8 = 56 이다.', ans:'O' }
+    },
+    'TF형': {
+      english: { q:'"book"의 복수형은 "bookes"이다.', ans:'False' },
+      math:    { q:'모든 정사각형은 직사각형이다.', ans:'True' }
+    },
+    '순서입력형': {
+      english: { q:'다음 영어 문장이 알맞은 순서가 되도록 번호를 적으세요.', items:['I', 'a','have','book.'] },
+      math:    { q:'다음 수를 작은 수부터 순서대로 번호를 적으세요.', items:['54','23','71','38'] }
+    },
+    '순서조합형': {
+      english: { q:'다음 단어들을 알맞은 순서로 배열하세요.', items:['He','plays','soccer','well.'] },
+      math:    { q:'다음 분수를 큰 순서대로 배열하세요.', items:['1/2','1/3','1/4','1/6'] }
+    },
+    '연결형': {
+      english: { q:'단어와 뜻을 알맞게 연결하세요.', pairs:[['apple','사과'],['book','책'],['water','물']] },
+      math:    { q:'도형과 이름을 알맞게 연결하세요.', pairs:[['△','삼각형'],['□','사각형'],['◯','원']] }
+    },
+    'Unscramble': {
+      english: { q:'다음 단어를 알맞은 순서로 배열하세요.', cards:['{It}','{is}','delicious!'], ans:'It is delicious!' },
+      math:    { q:'다음 수식의 카드를 알맞은 순서로 배열하세요.', cards:['{3}','{+}','5','=','8'], ans:'3 + 5 = 8' }
+    },
+    '선택형(초등)': {
+      english: { q:'다음 그림에 알맞은 단어를 고르세요. 🎧', items:['① happy','② sad'], ans:'① happy', mode:'Listening' },
+      math:    { q:'다음 그림에 알맞은 모양을 고르세요.', items:['① △','② □'], ans:'① △', mode:'Reading' }
+    },
+    'OX형(초등)': {
+      english: { q:'다음 그림과 단어가 일치하면 O, 다르면 X 하세요. 🎧', ans:'O', mode:'Listening(OX)' },
+      math:    { q:'다음 식이 맞으면 O, 틀리면 X 하세요.  3 + 4 = 7', ans:'O', mode:'Reading(OX)' }
+    },
+    'Unscramble(초등)': {
+      english: { q:'다음 단어를 글자 순서대로 배열하세요.', cards:['h','e','r','o'], ans:'hero' },
+      math:    { q:'다음 식이 알맞은 순서가 되도록 배열하세요.', cards:['2','+','3','=','5'], ans:'2 + 3 = 5' }
+    },
+    '선택형 활동': {
+      english: { q:'학생들에게 활동 안내', sub:'좋아하는 동물에 ✓ 표시해 보세요.', items:['cat','dog','bird','fish'] },
+      math:    { q:'학생들에게 활동 안내', sub:'주변에서 사각형 모양을 모두 찾아 ✓ 표시해 보세요.', items:['창문','책','공','시계'] }
+    },
+    '단답형 활동': {
+      english: { q:'활동 안내', sub:'친구의 이름을 영어로 5가지 적어 보세요.' },
+      math:    { q:'활동 안내', sub:'주변에서 찾은 길이를 cm로 적어 보세요.' }
+    },
+    '서술형 활동': {
+      english: { q:'활동 안내', sub:'오늘 한 일을 영어로 3문장 이상 써 보세요.' },
+      math:    { q:'활동 안내', sub:'문제 풀이 과정을 자세히 써 보세요.' }
+    },
+    '연쇄형 활동': {
+      english: { q:'다음 단계로 활동을 진행하세요.', subs:['(1) 짝과 인사 나누기', '(2) 자기소개 영어로 말하기', '(3) 활동 결과 발표'] },
+      math:    { q:'다음 단계로 활동을 진행하세요.', subs:['(1) 모양 관찰하기', '(2) 분류 기준 정하기', '(3) 분류 결과 발표'] }
+    },
+    '빈 문서': {
+      english: { q:'자유롭게 내용을 작성하세요.', sub:'영어 콘텐츠를 위한 빈 캔버스입니다.' },
+      math:    { q:'자유롭게 내용을 작성하세요.', sub:'수학 콘텐츠를 위한 빈 캔버스입니다.' }
+    }
+  };
+
+  var d = (content[tmplName] && (isEng ? content[tmplName].english : content[tmplName].math)) || null;
+  if(!d){
+    return '<div style="color:#9CA3AF;text-align:center;padding:40px 0;font-size:12px;">"'+tmplName+'" 미리보기 준비 중…</div>';
+  }
+
+  var modeBadge = d.mode ? '<div style="margin-bottom:8px;">'+labelBadge(d.mode,'#4B6EF5')+'</div>' : '';
+  var html = modeBadge + '<div style="font-size:13px;font-weight:700;color:#1E2340;margin-bottom:10px;line-height:1.6;">'+d.q+'</div>';
+  if(d.sub) html += '<div style="font-size:12px;color:#555E75;margin-bottom:10px;line-height:1.7;background:#F0F4FF;padding:10px 12px;border-radius:8px;border-left:3px solid #4B6EF5;">'+d.sub+'</div>';
+  if(d.items){
+    html += '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">';
+    d.items.forEach(function(it){ html += '<div style="'+qBox+'">'+it+'</div>'; });
+    html += '</div>';
+  }
+  if(d.cards){
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">';
+    d.cards.forEach(function(c){
+      var isBlank = /^\{.+\}$/.test(c);
+      var displayText = c.replace(/[{}]/g,'');
+      var bg = isBlank ? '#DBE4FF' : 'white';
+      var color = isBlank ? '#3D5BD9' : '#1E2340';
+      html += '<div style="border:1.5px solid #CBD5FF;background:'+bg+';color:'+color+';border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;">'+displayText+'</div>';
+    });
+    html += '</div>';
+  }
+  if(d.pairs){
+    html += '<div style="display:grid;grid-template-columns:1fr 16px 1fr;gap:6px 8px;margin-bottom:10px;align-items:center;">';
+    d.pairs.forEach(function(p){
+      html += '<div style="'+qBox+'text-align:center;">'+p[0]+'</div>';
+      html += '<div style="text-align:center;color:#9CA3AF;">—</div>';
+      html += '<div style="'+qBox+'text-align:center;">'+p[1]+'</div>';
+    });
+    html += '</div>';
+  }
+  if(d.subs){
+    html += '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">';
+    d.subs.forEach(function(s){ html += '<div style="'+qBox+'">'+s+'</div>'; });
+    html += '</div>';
+  }
+  if(d.ans){
+    html += '<div style="margin-top:12px;padding:8px 12px;background:#FFF3E8;border-radius:8px;font-size:11.5px;color:#C05E10;font-weight:700;">정답: '+d.ans+'</div>';
+  }
+  return html;
+};
+
+// [ADDED 2026-04] 하단 "템플릿 선택" 버튼 — 선택된 템플릿 삽입
+window.tmplRecBlankConfirm = function(){
+  var name = window._tmplBlankSelected;
+  if(!name){
+    if(typeof T === 'function') T('템플릿을 선택하세요');
+    return;
+  }
+  if(typeof window.tmplRecInsertBlank === 'function'){
+    window.tmplRecInsertBlank(name);
+  }
+};
 
 // [ADDED 2026-04] 빈 템플릿 카드 클릭 → 심플모드 빈 템플릿 삽입
 window.tmplRecInsertBlank = function(tmplName){
